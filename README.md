@@ -1,66 +1,41 @@
-# Satis
+# GSatis ([Satis][satis] with GitHub Private Organisation Support)
 
 Simple static Composer repository generator.
 
 [![Build Status](https://travis-ci.org/composer/satis.svg?branch=master)](https://travis-ci.org/composer/satis)
 [![codecov](https://codecov.io/gh/composer/satis/branch/master/graph/badge.svg)](https://codecov.io/gh/composer/satis)
 
+## GitHub Private Organisation Support
+
+I have few private GitHub organisations which have many private composer libraries, and Satis requires to add them all
+one by one in `satis.json` file, which is pretty annoying if you have more than few libraries.
+
+So I forked Satis project and added Github Organisation support by running GitHub API V4 GraphQL query to fetch all
+repositories with composer.json file if it exists and add that repository into repository list programmatically.
+
+For authentication, it uses Composer Github OAuth Token so no additional configuration is required.
+
+```json
+{
+  "name": "Satis Repository",
+  "homepage": "http://127.0.0.1",
+  "repositories": [
+  ],
+  "github-organisations": ["composer"],
+  "require-all": true,
+  "output-dir": "./public"
+}
+```
 
 ## Run from source
 
 Satis requires a recent PHP version, it does not run with unsupported PHP versions. Check the `composer.json` file for details.
 
-- Install satis: `composer create-project composer/satis:dev-master`
+- Install satis: `composer create-project aurimasniekis/gsatis:dev-master`
 - Build a repository: `php bin/satis build <configuration-file> <output-directory>`
 
 Read the more detailed instructions in the [documentation][].
 
-
-## Run as Docker container
-
-Pull the image:
-
-``` sh
-docker pull composer/satis
-```
-
-Run the image (with Composer cache from host):
-
-``` sh
-docker run --rm --init -it \
-  --user $(id -u):$(id -g) \
-  --volume $(pwd):/build \
-  --volume "${COMPOSER_HOME:-$HOME/.composer}:/composer" \
-  composer/satis build <configuration-file> <output-directory>
-```
-
-If you want to run the image without implicitly running Satis, you have to
-override the entrypoint specified in the `Dockerfile`:
-
-``` sh
---entrypoint /bin/sh
-```
-
-
-## Purge
-
-If you choose to archive packages as part of your build, over time you can be
-left with useless files. With the `purge` command, you can delete these files.
-
-``` sh
-php bin/satis purge <configuration-file> <output-dir>
-```
-
- > Note: don't do this unless you are certain your projects no longer reference
-    any of these archives in their `composer.lock` files.
-
-
-## Updating
-
-Updating Satis is as simple as running `git pull && composer install` in the
-Satis directory.
-
-If you are running Satis as a Docker container, simply pull the latest image.
 
 
 ## Contributing
@@ -108,3 +83,4 @@ Satis is licensed under the MIT License - see the [LICENSE][] file for details
 [composer-satis-builder]: https://github.com/AOEpeople/composer-satis-builder
 [LICENSE]: https://github.com/composer/satis/blob/master/LICENSE
 [eventum/composer]: https://github.com/eventum/composer
+[satis]: https://github.com/composer/satis/

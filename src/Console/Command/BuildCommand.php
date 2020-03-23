@@ -14,10 +14,13 @@ declare(strict_types=1);
 namespace Composer\Satis\Console\Command;
 
 use Composer\Command\BaseCommand;
+use Composer\Composer;
 use Composer\Config;
 use Composer\Config\JsonConfigSource;
+use Composer\Factory;
 use Composer\Json\JsonFile;
 use Composer\Json\JsonValidationException;
+use Composer\Repository\RepositoryFactory;
 use Composer\Satis\Builder\ArchiveBuilder;
 use Composer\Satis\Builder\PackagesBuilder;
 use Composer\Satis\Builder\WebBuilder;
@@ -173,6 +176,9 @@ EOT
         /** @var $application Application */
         $application = $this->getApplication();
         $composer = $application->getComposer(true, $config);
+
+        $this->loadGithubOrganisations($config['github-organisations'] ?? [], $output, $composer);
+
         $packageSelection = new PackageSelection($output, $outputDir, $config, $skipErrors);
 
         if (null !== $repositoryUrl) {
@@ -288,5 +294,118 @@ EOT
         }
 
         throw new ParsingException('"' . $configFile . '" does not contain valid JSON' . "\n" . $result->getMessage(), $result->getDetails());
+    }
+
+    private function loadGithubOrganisations(array $organisations, OutputInterface $output, Composer $composer): void
+    {
+        $rfs = Factory::createRemoteFilesystem(
+            $this->getIO(),
+            $composer->getConfig()
+        );
+
+        foreach ($organisations as $organisation) {
+            $repositories = $this->loadGithubOrganisation($rfs, $output, $organisation);
+
+            $output->writeln(
+                sprintf(
+                    '<info>Github Organisation "%s" returned "%d" repositories',
+                    $organisation,
+                    count($repositories)
+                )
+            );
+
+            foreach ($repositories as $repository) {
+                $composer->getRepositoryManager()->addRepository(
+                    RepositoryFactory::createRepo($this->getIO(), $composer->getConfig(), $repository)
+                );
+            }
+        }
+    }
+
+    private function loadGithubOrganisation(
+        RemoteFilesystem $rfs,
+        OutputInterface $output,
+        string $organisation,
+        string $after = 'null'
+    ): array {
+        $graphqlBody = <<<GRAPHQL
+{
+  organization(login: "$organisation") {
+    repositories(first: 100, after: $after) {
+      totalCount
+      nodes {
+        id
+        sshUrl
+        name
+        folder: object(expression: "HEAD:composer.json") {
+          ... on Blob {
+            text
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+GRAPHQL;
+
+        $postData = ['query' => $graphqlBody];
+
+        $opts = [
+            'http' =>
+                [
+                    'method' => 'POST',
+                    'header' => ['Content-Type: application/json'],
+                    'content' => json_encode($postData, JSON_THROW_ON_ERROR),
+                ],
+        ];
+
+        $json = $rfs->getContents('github.com', 'https://api.github.com/graphql', true, $opts);
+        $response = json_decode($json, true, JSON_THROW_ON_ERROR);
+
+        if (isset($response['errors'])) {
+            foreach ($response['errors'] as $error) {
+                $output->writeln(
+                    '<error>' .
+                    $error['message'] ?? 'Unknown error Github GraphQL' .
+                    '/<error>'
+                );
+            }
+        }
+
+        $repositories = [];
+
+        foreach ($response['data']['organization']['repositories']['nodes'] ?? [] as $repository) {
+            if (null !== $repository['folder']) {
+                $composerJson = json_decode($repository['folder']['text'] ?? '{}', true, JSON_THROW_ON_ERROR);
+
+                if (false === isset($composerJson['name'])) {
+                    continue;
+                }
+
+                $repositories[] = [
+                    'type' => 'git',
+                    'url' => $repository['sshUrl'],
+                ];
+            }
+        }
+
+        if (isset($response['data']['organization']['repositories']['pageInfo']['hasNextPage'])) {
+            if (true === $response['data']['organization']['repositories']['pageInfo']['hasNextPage']) {
+                $nextPageResults = $this->loadGithubOrganisation(
+                    $rfs,
+                    $output,
+                    $organisation,
+                    '"' . $response['data']['organization']['repositories']['pageInfo']['endCursor'] . '"'
+                );
+
+                $repositories = array_merge($repositories, $nextPageResults);
+            }
+        }
+
+        return $repositories;
     }
 }

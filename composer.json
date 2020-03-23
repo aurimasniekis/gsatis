@@ -1,5 +1,5 @@
 {
-    "name": "composer/satis",
+    "name": "aurimasniekis/gsatis",
     "description": "Simple Repository Generator",
     "keywords": ["package", "repository", "generator", "static", "composer"],
     "homepage": "https://github.com/composer/satis",
@@ -17,6 +17,10 @@
         "name": "Rob Bast",
         "email": "rob.bast@gmail.com",
         "homepage": "https://robbast.nl"
+    }, {
+        "name": "Aurimas Niekis",
+        "email": "aurimas@niekis.lt",
+        "homepage": "https://aurimas.niekis.lt"
     }],
     "support": {
         "issues": "https://github.com/composer/satis",
